@@ -23,6 +23,7 @@ local T = require("ffi/util").template
 local BookSource = require("crossword_book_source")
 local Crosshare = require("crossword_crosshare")
 local DB = require("crossword_db")
+local Dispatcher = require("dispatcher")
 local GameScreen = require("crossword_game_screen")
 local Generator = require("crossword_generator")
 local Guardian = require("crossword_guardian")
@@ -44,6 +45,17 @@ local Crossword = WidgetContainer:extend{
 function Crossword:init()
     self.db = DB.open()
     self.ui.menu:registerToMainMenu(self)
+    
+    Dispatcher:registerAction("crossword_menu", {
+        category = "none",
+        event = "CrosswordMenu",
+        title = _("Crossword"),
+        general = true,
+    })
+end
+
+function Crossword:onCrosswordMenu()
+    self:showQuickMenu()
 end
 
 function Crossword:addToMainMenu(menu_items)
@@ -56,63 +68,246 @@ function Crossword:addToMainMenu(menu_items)
     }
 end
 
+function Crossword:getMenuActions()
+    local current = self.db:getCurrent()
+    local has_current = current ~= nil
+    local has_recents = #self.db:getRecents() > 0
+    
+    local continue_text = _("Continue")
+    if has_current and current.title and current.title ~= "" then
+        continue_text = T(_("Continue: %1"), current.title)
+    end
+    
+    return {
+        {
+            id = "continue",
+            text = continue_text,
+            enabled = has_current,
+            callback = function() self:continuePuzzle() end,
+        },
+        {
+            id = "library",
+            text = _("Library (local files)"),
+            callback = function() self:openLibrary() end,
+        },
+        {
+            id = "recents",
+            text = _("Recently played"),
+            enabled = has_recents,
+            callback = function() self:openRecents() end,
+        },
+        {
+            id = "sources",
+            text = _("Download from sources"),
+            has_submenu = true,
+            submenu_builder = function() return self:buildSourcesMenu() end,
+            dialog_callback = function() self:showSourcesQuickMenu() end,
+        },
+        {
+            id = "guardian",
+            text = _("Guardian crosswords"),
+            has_submenu = true,
+            submenu_builder = function() return self:buildGuardianMenu() end,
+            dialog_callback = function() self:showGuardianQuickMenu() end,
+        },
+        {
+            id = "crosshare",
+            text = _("Get from Crosshare"),
+            has_submenu = true,
+            submenu_builder = function() return self:buildCrosshareMenu() end,
+            dialog_callback = function() self:promptCrosshareId() end,
+        },
+        {
+            id = "generate",
+            text = _("Generate puzzle"),
+            callback = function() self:openGenerateMenu() end,
+        },
+        {
+            id = "settings",
+            text = _("Settings"),
+            has_submenu = true,
+            submenu_builder = function() return Settings.buildSubMenu(self.db, function() end) end,
+        },
+    }
+end
+
+function Crossword:getSourcesActions()
+    local actions = {}
+    
+    for _idx, source in ipairs(Sources.SOURCES) do
+        local captured = source
+        actions[#actions + 1] = {
+            text = T(_("Today's %1"), captured.label),
+            callback = function() self:fetchFromSource(captured, nil) end,
+        }
+    end
+    
+    actions[#actions + 1] = {
+        text = _("By date…"),
+        has_submenu = true,
+        submenu_builder = function() return self:buildSourcesByDateMenu() end,
+        dialog_callback = function() self:showSourcesByDateMenu() end,
+    }
+    
+    return actions
+end
+
+function Crossword:getGuardianActions()
+    local actions = {}
+    
+    for _idx, series in ipairs(Guardian.SERIES) do
+        local captured = series
+        actions[#actions + 1] = {
+            text = T(_("Today's %1"), captured.label),
+            callback = function() self:fetchFromGuardian(captured.id, nil) end,
+        }
+    end
+    
+    actions[#actions + 1] = {
+        text = _("By number…"),
+        callback = function() self:promptGuardianByNumber() end,
+    }
+    
+    actions[#actions + 1] = {
+        text = _("From URL…"),
+        callback = function() self:promptGuardianByUrl() end,
+    }
+    
+    return actions
+end
+
+function Crossword:showQuickMenu()
+    local actions = self:getMenuActions()
+    local buttons = {}
+    
+    for _, action in ipairs(actions) do
+        if action.id ~= "settings" then
+            buttons[#buttons + 1] = {
+                {
+                    text = action.text,
+                    background = Blitbuffer.COLOR_WHITE,
+                    enabled = action.enabled,
+                    callback = function()
+                        UIManager:close(self.quick_menu)
+                        if action.has_submenu and action.dialog_callback then
+                            action.dialog_callback()
+                        elseif action.callback then
+                            action.callback()
+                        end
+                    end,
+                },
+            }
+        end
+    end
+    
+    self.quick_menu = ButtonDialog:new{
+        buttons = buttons,
+    }
+    UIManager:show(self.quick_menu)
+end
+
+function Crossword:showSourcesQuickMenu()
+    local actions = self:getSourcesActions()
+    local buttons = {}
+    
+    for _, action in ipairs(actions) do
+        buttons[#buttons + 1] = {
+            {
+                text = action.text,
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    UIManager:close(self.sources_menu)
+                    if action.has_submenu and action.dialog_callback then
+                        action.dialog_callback()
+                    elseif action.callback then
+                        action.callback()
+                    end
+                end,
+            },
+        }
+    end
+    
+    self.sources_menu = ButtonDialog:new{
+        title = _("Download from sources"),
+        buttons = buttons,
+    }
+    UIManager:show(self.sources_menu)
+end
+
+function Crossword:showSourcesByDateMenu()
+    local buttons = {}
+    
+    for _idx, source in ipairs(Sources.SOURCES) do
+        if source.supports_date ~= false then
+            local captured = source
+            buttons[#buttons + 1] = {
+                {
+                    text = captured.label,
+                    background = Blitbuffer.COLOR_WHITE,
+                    callback = function()
+                        UIManager:close(self.sources_date_menu)
+                        self:promptDateForSource(captured)
+                    end,
+                },
+            }
+        end
+    end
+    
+    self.sources_date_menu = ButtonDialog:new{
+        title = _("Select source for date"),
+        buttons = buttons,
+    }
+    UIManager:show(self.sources_date_menu)
+end
+
+function Crossword:showGuardianQuickMenu()
+    local actions = self:getGuardianActions()
+    local buttons = {}
+    
+    for _, action in ipairs(actions) do
+        buttons[#buttons + 1] = {
+            {
+                text = action.text,
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    UIManager:close(self.guardian_menu)
+                    if action.callback then
+                        action.callback()
+                    end
+                end,
+            },
+        }
+    end
+    
+    self.guardian_menu = ButtonDialog:new{
+        title = _("Guardian crosswords"),
+        buttons = buttons,
+    }
+    UIManager:show(self.guardian_menu)
+end
+
 function Crossword:buildMenu()
+    local actions = self:getMenuActions()
     local items = {}
-
-    items[#items + 1] = {
-        text_func = function()
-            local current = self.db:getCurrent()
-            if current and current.title and current.title ~= "" then
-                return T(_("Continue: %1"), current.title)
-            end
-            return _("Continue")
-        end,
-        enabled_func = function()
-            return self.db:getCurrent() ~= nil
-        end,
-        callback = function()
-            self:continuePuzzle()
-        end,
-    }
-
-    items[#items + 1] = {
-        text = _("Library (local files)"),
-        callback = function() self:openLibrary() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Recently played"),
-        enabled_func = function() return #self.db:getRecents() > 0 end,
-        callback = function() self:openRecents() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Download from sources"),
-        sub_item_table_func = function() return self:buildSourcesMenu() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Guardian crosswords"),
-        sub_item_table_func = function() return self:buildGuardianMenu() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Get from Crosshare"),
-        sub_item_table_func = function() return self:buildCrosshareMenu() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Generate puzzle"),
-        callback = function() self:openGenerateMenu() end,
-    }
-
-    items[#items + 1] = {
-        text = _("Settings"),
-        sub_item_table_func = function()
-            return Settings.buildSubMenu(self.db, function() end)
-        end,
-    }
-
+    
+    for _, action in ipairs(actions) do
+        local item = {
+            text = action.text,
+        }
+        
+        if action.enabled ~= nil then
+            item.enabled_func = function() return action.enabled end
+        end
+        
+        if action.has_submenu and action.submenu_builder then
+            item.sub_item_table_func = action.submenu_builder
+        elseif action.callback then
+            item.callback = action.callback
+        end
+        
+        items[#items + 1] = item
+    end
+    
     return items
 end
 
@@ -322,22 +517,25 @@ end
 -- --------------------------------------------------------------------------
 
 function Crossword:buildSourcesMenu()
+    local actions = self:getSourcesActions()
     local items = {}
-    for _idx, source in ipairs(Sources.SOURCES) do
-        local captured = source
-        items[#items + 1] = {
-            text = T(_("Today's %1"), captured.label),
-            keep_menu_open = false,
-            callback = function()
-                self:fetchFromSource(captured, nil)
-            end,
+    
+    for _, action in ipairs(actions) do
+        local item = {
+            text = action.text,
         }
+        
+        if action.has_submenu and action.submenu_builder then
+            item.keep_menu_open = true
+            item.sub_item_table_func = action.submenu_builder
+        elseif action.callback then
+            item.keep_menu_open = false
+            item.callback = action.callback
+        end
+        
+        items[#items + 1] = item
     end
-    items[#items + 1] = {
-        text = _("By date…"),
-        keep_menu_open = true,
-        sub_item_table_func = function() return self:buildSourcesByDateMenu() end,
-    }
+    
     return items
 end
 
@@ -548,27 +746,17 @@ end
 -- --------------------------------------------------------------------------
 
 function Crossword:buildGuardianMenu()
+    local actions = self:getGuardianActions()
     local items = {}
-    for _idx, series in ipairs(Guardian.SERIES) do
-        local captured = series
+    
+    for _, action in ipairs(actions) do
         items[#items + 1] = {
-            text = T(_("Today's %1"), captured.label),
-            keep_menu_open = false,
-            callback = function()
-                self:fetchFromGuardian(captured.id, nil)
-            end,
+            text = action.text,
+            keep_menu_open = true,
+            callback = action.callback,
         }
     end
-    items[#items + 1] = {
-        text = _("By number…"),
-        keep_menu_open = true,
-        callback = function() self:promptGuardianByNumber() end,
-    }
-    items[#items + 1] = {
-        text = _("From Guardian URL…"),
-        keep_menu_open = true,
-        callback = function() self:promptGuardianByUrl() end,
-    }
+    
     return items
 end
 
