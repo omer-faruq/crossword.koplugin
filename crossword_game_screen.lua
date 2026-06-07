@@ -165,6 +165,8 @@ function GameScreen:buildLayout()
         VerticalSpan:new{ width = Size.span.vertical_default },
         self.clue_text,
     }
+    -- Kept around so refresh() can swap in a freshly-built clue_text widget.
+    self.top_stack = top_stack
 
     -- Pin the keyboard to the bottom edge of the screen so it never overlaps
     -- the clue line, even if the clue wraps to two lines.
@@ -195,7 +197,32 @@ function GameScreen:paintTo(bb, x, y)
 end
 
 function GameScreen:refresh()
-    self.clue_text:setText(self:buildClueText())
+    local new_text = self:buildClueText()
+    if new_text ~= self.clue_text.text then
+        -- Reusing the existing TextBoxWidget via setText() leaves the banner
+        -- blank on some setups (internal render state survives the content
+        -- swap incorrectly), even though the new text is computed correctly.
+        -- Building a fresh widget -- exactly what happens when the screen is
+        -- closed and reopened, where the banner does render correctly --
+        -- sidesteps that stale state entirely.
+        local old_clue_text = self.clue_text
+        local new_clue_text = TextBoxWidget:new{
+            text = new_text,
+            face = self.clue_face,
+            width = math.floor(Screen:getWidth() * 0.92),
+            height = self.clue_height,
+            alignment = "center",
+        }
+        for i, w in ipairs(self.top_stack) do
+            if w == old_clue_text then
+                self.top_stack[i] = new_clue_text
+                break
+            end
+        end
+        self.clue_text = new_clue_text
+        self.top_stack:resetLayout()
+        old_clue_text:free()
+    end
     self.grid_widget:refresh()
     UIManager:setDirty(self, function() return "ui", self.dimen end)
 end
