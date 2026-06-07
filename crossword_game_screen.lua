@@ -138,6 +138,15 @@ function GameScreen:buildClueText()
     if not word then
         return _("No clue selected.")
     end
+    -- A cell that starts a word in one direction can simultaneously sit in
+    -- the middle of a word in the other direction (and carry its own,
+    -- different number). Only show the clue when the cursor is on the
+    -- word's first cell, so the displayed number always matches the one
+    -- the cursor is sitting on -- otherwise leave the banner blank.
+    local row, col = self.puzzle:getCursor()
+    if row ~= word.start_row or col ~= word.start_col then
+        return ""
+    end
     local dir_label = (word.direction == "across") and _("Across") or _("Down")
     local clue = word.clue
     if clue == nil or clue == "" then clue = _("(no clue)") end
