@@ -391,6 +391,31 @@ function Puzzle:advanceInWord()
     return false
 end
 
+-- Move the cursor one cell in an absolute screen direction ("up"/"down"/
+-- "left"/"right"), skipping black squares and stopping at the grid edge.
+-- Horizontal moves switch the active direction to "across", vertical moves to
+-- "down", so the highlighted word and clue follow the movement axis. Returns
+-- true if the cursor moved.
+function Puzzle:moveCursorDir(direction)
+    local dr, dc = 0, 0
+    if direction == "up" then dr = -1
+    elseif direction == "down" then dr = 1
+    elseif direction == "left" then dc = -1
+    elseif direction == "right" then dc = 1
+    else return false end
+    local r, c = self.cursor.row, self.cursor.col
+    repeat
+        r = r + dr
+        c = c + dc
+        if r < 1 or r > self.height or c < 1 or c > self.width then
+            return false
+        end
+    until self:isWhite(r, c)
+    self.cursor.row, self.cursor.col = r, c
+    self.cursor.direction = (dc ~= 0) and "across" or "down"
+    return true
+end
+
 function Puzzle:moveToClue(direction, num)
     local cells_map = (direction == "across") and self.across_cells or self.down_cells
     local cell = cells_map[num]

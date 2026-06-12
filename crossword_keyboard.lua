@@ -118,9 +118,13 @@ function Keyboard.build(opts)
         },
     }
 
+    -- Default to shrinking to natural content width, but let callers turn it
+    -- off so the keyboard expands its keys to fill the given width instead.
+    local shrink = opts.shrink_unneeded_width
+    if shrink == nil then shrink = true end
     return ButtonTable:new{
         width = opts.width,
-        shrink_unneeded_width = true,
+        shrink_unneeded_width = shrink,
         buttons = rows,
     }
 end

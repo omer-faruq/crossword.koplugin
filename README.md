@@ -87,6 +87,8 @@ For the **latest NYT puzzles** (requires subscription), use the community tool [
 ## Controls in Game Screen
 
 - **Tap a cell** to move the cursor. Tap the same cell again to toggle direction (Across ↔ Down).
+- **Clue banner** always shows the clue for the word under the cursor. **Tap the banner** to pop up the full clue when a long one is cut off.
+- **D-pad** (to the right of the keyboard) moves the cursor one cell at a time (handy when most cells are filled in); the center button toggles direction.
 - **On-screen keyboard** places letters and auto-advances within the current word.
 - **Erase** clears the focused cell.
 - **Prev / Next** step through clues in the current direction.
