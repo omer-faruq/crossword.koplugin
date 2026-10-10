@@ -1,9 +1,10 @@
 --[[
 Crossword local library.
 
-Scans the plugin's `puzzles/` folder for .puz and .ipuz files, optionally
-merges recently-opened entries (which may live anywhere on the filesystem),
-and loads the selected puzzle into a Puzzle instance via the right parser.
+Scans the puzzle folders (the plugin's `puzzles/` and `koreader/data/crossword/`)
+for .puz, .ipuz and NYT archive .json files, optionally merges recently-opened
+entries (which may live anywhere on the filesystem), and loads the selected
+puzzle into a Puzzle instance via the right parser.
 ]]--
 
 local DataStorage = require("datastorage")
@@ -12,6 +13,7 @@ local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
 
 local IpuzParser = require("crossword_ipuz_parser")
+local NYT = require("crossword_nyt")
 local Puzzle = require("crossword_puzzle")
 local PuzParser = require("crossword_puz_parser")
 
@@ -29,6 +31,9 @@ end
 
 Library.PLUGIN_PATH = getPluginPath()
 Library.PUZZLES_DIR = ffiUtil.joinPath(Library.PLUGIN_PATH, "puzzles")
+-- Outside the plugin folder, so puzzles survive a plugin reinstall
+Library.DATA_PUZZLES_DIR = ffiUtil.joinPath(DataStorage:getDataDir(), "data/crossword")
+Library.PUZZLE_DIRS = { Library.PUZZLES_DIR, Library.DATA_PUZZLES_DIR }
 
 local function fileExists(path)
     local attr = lfs.attributes(path)
@@ -50,19 +55,25 @@ function Library.detectFormat(path)
     local lower = path:lower()
     if lower:sub(-4) == ".puz" then return "puz" end
     if lower:sub(-5) == ".ipuz" then return "ipuz" end
+    if lower:sub(-5) == ".json" then return "json" end
     return nil
+end
+
+local function parseFile(format, path)
+    if format == "puz" then return PuzParser.parse(path) end
+    if format == "ipuz" then return IpuzParser.parse(path) end
+    return NYT.parseFile(path)
 end
 
 function Library.loadFromFile(path)
     local format = Library.detectFormat(path)
     if not format then
-        return nil, _("Unsupported file extension (need .puz or .ipuz).")
+        return nil, _("Unsupported file extension (need .puz, .ipuz or .json).")
     end
     if not fileExists(path) then
         return nil, _("File not found.")
     end
-    local parser = (format == "puz") and PuzParser or IpuzParser
-    local data, err = parser.parse(path)
+    local data, err = parseFile(format, path)
     if not data then return nil, err end
     data.source = {
         type = "file",
@@ -73,23 +84,29 @@ function Library.loadFromFile(path)
 end
 
 -- Returns a list of {title, author, path, format, size} entries for files
--- inside the puzzles/ directory.
+-- directly inside the puzzle folders. Subfolders (e.g. a full copy of the NYT
+-- archive) are not listed; the NYT source reads those by date.
 function Library.listFiles()
     Library.ensurePuzzlesDir()
     local out = {}
-    for name in lfs.dir(Library.PUZZLES_DIR) do
-        local full = ffiUtil.joinPath(Library.PUZZLES_DIR, name)
-        local attr = lfs.attributes(full)
-        if attr and attr.mode == "file" then
-            local format = Library.detectFormat(name)
-            if format then
-                out[#out + 1] = {
-                    title = name,
-                    path = full,
-                    format = format,
-                    size = attr.size,
-                    modified = attr.modification,
-                }
+    for _idx, dir in ipairs(Library.PUZZLE_DIRS) do
+        local attr = lfs.attributes(dir)
+        if attr and attr.mode == "directory" then
+            for name in lfs.dir(dir) do
+                local full = ffiUtil.joinPath(dir, name)
+                local fattr = lfs.attributes(full)
+                if fattr and fattr.mode == "file" then
+                    local format = Library.detectFormat(name)
+                    if format then
+                        out[#out + 1] = {
+                            title = name,
+                            path = full,
+                            format = format,
+                            size = fattr.size,
+                            modified = fattr.modification,
+                        }
+                    end
+                end
             end
         end
     end
@@ -100,10 +117,7 @@ end
 -- Very lightweight header-only peek to show title/author in the list without
 -- fully parsing every file. Best-effort; returns nil on failure.
 function Library.peek(entry)
-    local ok, data = pcall(function()
-        local parser = (entry.format == "puz") and PuzParser or IpuzParser
-        return parser.parse(entry.path)
-    end)
+    local ok, data = pcall(parseFile, entry.format, entry.path)
     if not ok or not data then return nil end
     return {
         title = (data.title and data.title ~= "") and data.title or entry.title,

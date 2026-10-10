@@ -136,10 +136,18 @@ function Crossword:getSourcesActions()
     
     for _idx, source in ipairs(Sources.SOURCES) do
         local captured = source
-        actions[#actions + 1] = {
-            text = T(_("Today's %1"), captured.label),
-            callback = function() self:fetchFromSource(captured, nil) end,
-        }
+        if captured.last_date then
+            -- Archive sources have no "today"; ask for a date instead
+            actions[#actions + 1] = {
+                text = captured.label .. "…",
+                callback = function() self:promptDateForSource(captured) end,
+            }
+        else
+            actions[#actions + 1] = {
+                text = T(_("Today's %1"), captured.label),
+                callback = function() self:fetchFromSource(captured, nil) end,
+            }
+        end
     end
     
     actions[#actions + 1] = {
@@ -341,13 +349,36 @@ function Crossword:onScreenClosed()
 end
 
 function Crossword:showGame(puzzle)
-    if self.screen then return end
+    if self.screen then
+        -- Switching puzzles from inside the game (archive prev/next): keep the
+        -- old one's progress and replace its screen
+        local old = self.screen
+        old:onClose()
+        UIManager:close(old)
+    end
     self.screen = GameScreen:new{
         puzzle = puzzle,
         plugin = self,
     }
     self:saveCurrent(puzzle)
     UIManager:show(self.screen)
+end
+
+-- For a puzzle from a fixed-range archive source (NYT), the source and date of
+-- the puzzle before (step = -1) or after (step = 1) it, or nil.
+function Crossword:getArchiveNeighbor(puzzle, step)
+    local src = puzzle and puzzle.source
+    if not src or src.type ~= "source" or type(src.ref) ~= "string" then return nil end
+    local source
+    for _idx, s in ipairs(Sources.SOURCES) do
+        if s.id == src.source_id then source = s break end
+    end
+    if not source or not source.adjacent_date then return nil end
+    local y, m, d = src.ref:match("/(%d%d%d%d)%-(%d%d)%-(%d%d)$")
+    if not y then return nil end
+    local date = source.adjacent_date({year = tonumber(y), month = tonumber(m), day = tonumber(d)}, step)
+    if not date then return nil end
+    return source, date
 end
 
 -- --------------------------------------------------------------------------
@@ -494,11 +525,17 @@ function Crossword:openLibrary()
     end
     if #items == 0 then
         items[#items + 1] = {
-            text = T(_("No puzzles found under %1"), Library.PUZZLES_DIR),
+            text = _("No puzzles found under:"),
             enabled = false,
         }
+        for _idx, dir in ipairs(Library.PUZZLE_DIRS) do
+            items[#items + 1] = {
+                text = dir,
+                enabled = false,
+            }
+        end
         items[#items + 1] = {
-            text = _("(drop .puz or .ipuz files there)"),
+            text = _("(drop .puz, .ipuz or NYT archive .json files there)"),
             enabled = false,
         }
     end
@@ -559,56 +596,82 @@ end
 
 function Crossword:promptDateForSource(source)
     local dialog
-    dialog = InputDialog:new{
-        title = T(_("%1 - Select date"), source.label),
-        description = _("Examples:\n• 2020-05-15 or 05/15/2020\n• yesterday, 3 days ago, 7 days ago"),
-        input = self.db:getSetting("last_source_date", "") or "",
-        buttons = {
+    local buttons = {
+        {
+            { text = _("Yesterday"), callback = function()
+                UIManager:close(dialog)
+                local now = os.date("*t")
+                local yesterday_time = os.time(now) - 86400
+                local yesterday = os.date("*t", yesterday_time)
+                self:fetchFromSource(source, {year = yesterday.year, month = yesterday.month, day = yesterday.day})
+            end },
+            { text = _("3 days ago"), callback = function()
+                UIManager:close(dialog)
+                local now = os.date("*t")
+                local past_time = os.time(now) - (3 * 86400)
+                local past = os.date("*t", past_time)
+                self:fetchFromSource(source, {year = past.year, month = past.month, day = past.day})
+            end },
+            { text = _("1 week ago"), callback = function()
+                UIManager:close(dialog)
+                local now = os.date("*t")
+                local past_time = os.time(now) - (7 * 86400)
+                local past = os.date("*t", past_time)
+                self:fetchFromSource(source, {year = past.year, month = past.month, day = past.day})
+            end },
+        },
+        {
+            { text = _("Cancel"), id = "close", callback = function() UIManager:close(dialog) end },
             {
-                { text = _("Yesterday"), callback = function()
+                text = _("Download"),
+                is_enter_default = true,
+                callback = function()
+                    local raw = dialog:getInputText() or ""
                     UIManager:close(dialog)
-                    local now = os.date("*t")
-                    local yesterday_time = os.time(now) - 86400
-                    local yesterday = os.date("*t", yesterday_time)
-                    self:fetchFromSource(source, {year = yesterday.year, month = yesterday.month, day = yesterday.day})
-                end },
-                { text = _("3 days ago"), callback = function()
-                    UIManager:close(dialog)
-                    local now = os.date("*t")
-                    local past_time = os.time(now) - (3 * 86400)
-                    local past = os.date("*t", past_time)
-                    self:fetchFromSource(source, {year = past.year, month = past.month, day = past.day})
-                end },
-                { text = _("1 week ago"), callback = function()
-                    UIManager:close(dialog)
-                    local now = os.date("*t")
-                    local past_time = os.time(now) - (7 * 86400)
-                    local past = os.date("*t", past_time)
-                    self:fetchFromSource(source, {year = past.year, month = past.month, day = past.day})
-                end },
-            },
-            {
-                { text = _("Cancel"), id = "close", callback = function() UIManager:close(dialog) end },
-                {
-                    text = _("Download"),
-                    is_enter_default = true,
-                    callback = function()
-                        local raw = dialog:getInputText() or ""
-                        UIManager:close(dialog)
-                        local date = self:parseDate(raw)
-                        if not date then
-                            UIManager:show(InfoMessage:new{
-                                text = _("Could not parse date. Try YYYY-MM-DD format."),
-                                timeout = 3,
-                            })
-                            return
-                        end
-                        self.db:setSetting("last_source_date", raw)
-                        self:fetchFromSource(source, date)
-                    end,
-                },
+                    local date = self:parseDate(raw)
+                    if not date then
+                        UIManager:show(InfoMessage:new{
+                            text = _("Could not parse date. Try YYYY-MM-DD format."),
+                            timeout = 3,
+                        })
+                        return
+                    end
+                    self.db:setSetting("last_source_date", raw)
+                    self:fetchFromSource(source, date)
+                end,
             },
         },
+    }
+    local description = _("Examples:\n• 2020-05-15 or 05/15/2020\n• yesterday, 3 days ago, 7 days ago")
+    if source.last_date then
+        -- Archive with a fixed range: relative dates would always miss it
+        table.remove(buttons, 1)
+        local function fmt(d) return string.format("%04d-%02d-%02d", d.year, d.month, d.day) end
+        description = T(_("Available: %1 to %2\nExamples: 1998-08-12 or 08/12/1998"),
+            fmt(source.first_date), fmt(source.last_date))
+        if source.gaps and #source.gaps > 0 then
+            -- Too many to list: name the month-plus gaps, count the rest
+            local gaps, short = {}, 0
+            for _idx, gap in ipairs(source.gaps) do
+                local days = (os.time{year = gap.last.year, month = gap.last.month, day = gap.last.day, hour = 12}
+                    - os.time{year = gap.first.year, month = gap.first.month, day = gap.first.day, hour = 12}) / 86400 + 1
+                if days >= 30 then
+                    gaps[#gaps + 1] = "• " .. fmt(gap.first) .. " – " .. fmt(gap.last)
+                else
+                    short = short + 1
+                end
+            end
+            if short > 0 then
+                gaps[#gaps + 1] = T(_("• and %1 shorter gaps"), short)
+            end
+            description = description .. "\n" .. _("Missing:") .. "\n" .. table.concat(gaps, "\n")
+        end
+    end
+    dialog = InputDialog:new{
+        title = T(_("%1 - Select date"), source.label),
+        description = description,
+        input = self.db:getSetting("last_source_date", "") or "",
+        buttons = buttons,
     }
     UIManager:show(dialog)
     dialog:onShowKeyboard()

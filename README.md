@@ -2,7 +2,7 @@
 
 Play classic crossword puzzles on your e-reader. Five ways to get puzzles:
 
-1. **Local files** — drop `.puz` (Across Lite) or `.ipuz` files into `plugins/crossword.koplugin/puzzles/` and open them from the library.
+1. **Local files** — drop `.puz` (Across Lite), `.ipuz` or NYT archive `.json` files into `koreader/data/crossword/` (survives plugin updates) or `plugins/crossword.koplugin/puzzles/` and open them from the library.
 2. **Download from sources** — fetch today's free puzzles from USA Today, Universal, Wall Street Journal, Washington Post, and more with one tap.
 3. **Guardian** — fetch any of the daily free puzzles from [The Guardian](https://www.theguardian.com/crosswords) (Quick, Cryptic, Everyman, Speedy, Prize, Weekend, Quiptic) — pick *Today's …* to download the latest, or open a specific number by URL.
 4. **Crosshare** — fetch free community puzzles from [crosshare.org](https://crosshare.org) by ID or URL.
@@ -23,7 +23,7 @@ Located under **Tools → Crossword**:
   - Jonesin' (Thursday puzzle)
   - Newsday
   - **BEQ (Brendan Emmett Quigley)** — Latest puzzle (Monday & Thursday)
-  - **New York Times (Archive)** — Every NYT puzzle from 1977 to present!
+  - **New York Times (Archive)** — Every NYT puzzle from 1976 to March 2018
 - **Guardian crosswords** — sub-menu: *Today's Quick / Cryptic / Everyman / Speedy / Prize / Weekend / Quiptic*, plus *By number…* and *From URL…*.
 - **Get from Crosshare** — sub-menu: *Paste Crosshare URL or ID…* (Crosshare does not publish a browseable API, so discovery still happens in a browser).
 - **Generate puzzle** — pick a word source, size, and difficulty to build a new puzzle.
@@ -40,7 +40,7 @@ All sources in the "Download from sources" menu are **completely free** and requ
 - **Jonesin'** — Thursday puzzle (published on Tuesday), quirky and fun
 - **Newsday** — Daily puzzle, intermediate difficulty
 - **BEQ (Brendan Emmett Quigley)** — Latest puzzle (Monday & Thursday), challenging and creative. Always fetches the most recent puzzle from brendanemmettquigley.com
-- **New York Times (Archive)** — Complete archive from 1977 to present! Use "By date…" to access any puzzle from the past 47+ years. Known gaps: Aug-Nov 1978, Aug 2015-May 2016
+- **New York Times (Archive)** — Complete archive from Jan 1976 to Mar 9, 2018 (the archive is no longer updated). Use "By date…" to pick a puzzle, or step day by day from the in-game menu.
 
 **Note**: The Atlantic, LA Times, and New Yorker sources have been temporarily disabled due to website changes that broke HTML parsing. They may be re-enabled in future updates.
 
@@ -58,7 +58,7 @@ Puzzles are automatically cached, so you can download once and replay offline.
 **Most Reliable (✅ Tested & Working):**
 - **USA Today / Universal** — Direct .puz downloads from Herbach mirror ✅
 - **Wall Street Journal** — Direct .puz downloads from Herbach mirror ✅
-- **New York Times Archive** — GitHub archive, 47+ years of puzzles ✅
+- **New York Times Archive** — GitHub archive, 1976–2018 ✅
 - **Washington Post Sunday** — Herbach mirror, Sunday only ✅
 - **Jonesin'** — Herbach mirror, Thursday puzzle (published Tuesday) ✅
 - **BEQ** — HTML parsing from brendanemmettquigley.com, always gets latest puzzle ✅
@@ -70,17 +70,20 @@ Puzzles are automatically cached, so you can download once and replay offline.
 **Important Notes:**
 - The **Herbach mirror** (herbach.dnsalias.com) occasionally goes down for maintenance
 - Some sources only publish on specific days (Sunday, Thursday, etc.)
-- If a source fails, try **NYT Archive** — it has 47+ years of reliable puzzles!
+- If a source fails, try **NYT Archive** — it has 42 years of reliable puzzles (1976–2018)!
 - Historical puzzles (via "By date…") are more reliable than today's puzzle for some sources
 
 ## New York Times Archive
 
-The plugin now includes **every New York Times crossword from 1977 to present** via the [doshea/nyt_crosswords](https://github.com/doshea/nyt_crosswords) GitHub archive! 
+The plugin includes **every New York Times crossword from Jan 1, 1976 to Mar 9, 2018** via the [doshea/nyt_crosswords](https://github.com/doshea/nyt_crosswords) GitHub archive! 
 
-- **47+ years** of puzzles available for free
+- **42 years** of puzzles available for free; the archive stopped being updated in March 2018, so later dates are not available
 - No subscription or authentication required
 - Use "By date…" to access any historical puzzle
-- Known gaps: Aug-Nov 1978, Aug 2015-May 2016
+- Gaps: the longest are Aug 10 – Nov 5, 1978 and Aug 30, 2015 – May 1, 2016; about 100 shorter stretches (mostly single days) are also missing, and from mid-2016 on only scattered days exist. The plugin knows every missing date and warns before downloading.
+- While an archive puzzle is open, **☰ Menu** shows `◀ previous date` / `next date ▶` buttons that step to the neighbouring puzzle, skipping missing days.
+
+**Offline use:** copy the whole repository (git clone or the GitHub zip, folder `nyt_crosswords` or `nyt_crosswords-master`) into `koreader/data/crossword/` or the plugin's `puzzles/` folder. "By date…" then reads `YYYY/MM/DD.json` from there and only goes online for missing dates. Individual `.json` files placed directly in those folders show up in the library.
 
 For the **latest NYT puzzles** (requires subscription), use the community tool [`xword-dl`](https://github.com/thisisparker/xword-dl) to download as `.puz` and place in the `puzzles/` folder.
 

@@ -433,128 +433,150 @@ end
 function GameScreen:openMenu()
     local dialog
     local function close() UIManager:close(dialog) end
-    dialog = ButtonDialog:new{
-        title = _("Crossword"),
-        buttons = {
+    local buttons = {
+        {
             {
-                {
-                    text = _("Check word"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function() close(); self:checkWord() end,
-                },
-                {
-                    text = _("Check puzzle"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        local correct, total = self.puzzle:checkAllFilled()
-                        self:save()
-                        self:refresh()
-                        
-                        if total == 0 then
-                            UIManager:show(InfoMessage:new{
-                                text = _("No letters filled yet."),
-                                timeout = 2,
-                            })
-                        elseif correct == total and self.puzzle:isSolved() then
-                            UIManager:show(InfoMessage:new{
-                                text = _("Congratulations! Puzzle completed successfully!"),
-                                timeout = 4,
-                            })
-                        elseif correct == total then
-                            UIManager:show(InfoMessage:new{
-                                text = T(_("All filled letters correct! (%1/%1)"), total),
-                                timeout = 3,
-                            })
-                        else
-                            UIManager:show(InfoMessage:new{
-                                text = T(_("Filled letters: %1/%2 correct"), correct, total),
-                                timeout = 3,
-                            })
-                        end
-                    end,
-                },
+                text = _("Check word"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function() close(); self:checkWord() end,
             },
             {
-                {
-                    text = _("Reveal letter"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        local r, c = self.puzzle:getCursor()
-                        self.puzzle:revealCell(r, c)
-                        self:save(); self:refresh()
-                    end,
-                },
-                {
-                    text = _("Reveal word"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        self.puzzle:revealWord()
-                        self:save(); self:refresh()
-                    end,
-                },
-                {
-                    text = _("Reveal all"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        UIManager:show(ConfirmBox:new{
-                            text = _("Reveal every letter? This ends the puzzle."),
-                            ok_text = _("Reveal"),
-                            ok_callback = function()
-                                self.puzzle:revealAll()
-                                self:save(); self:refresh()
-                            end,
+                text = _("Check puzzle"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    local correct, total = self.puzzle:checkAllFilled()
+                    self:save()
+                    self:refresh()
+                    
+                    if total == 0 then
+                        UIManager:show(InfoMessage:new{
+                            text = _("No letters filled yet."),
+                            timeout = 2,
                         })
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Reset puzzle"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        UIManager:show(ConfirmBox:new{
-                            text = _("Clear all your answers?"),
-                            ok_text = _("Reset"),
-                            ok_callback = function()
-                                self.puzzle:resetUser()
-                                self.puzzle:ensureCursorOnWhite()
-                                self:save(); self:refresh()
-                            end,
+                    elseif correct == total and self.puzzle:isSolved() then
+                        UIManager:show(InfoMessage:new{
+                            text = _("Congratulations! Puzzle completed successfully!"),
+                            timeout = 4,
                         })
-                    end,
-                },
-                {
-                    text = _("Info"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = function()
-                        close()
-                        local lines = {}
-                        if self.puzzle.title ~= "" then lines[#lines+1] = T(_("Title: %1"), self.puzzle.title) end
-                        if self.puzzle.author ~= "" then lines[#lines+1] = T(_("Author: %1"), self.puzzle.author) end
-                        if self.puzzle.copyright ~= "" then lines[#lines+1] = T(_("Copyright: %1"), self.puzzle.copyright) end
-                        local filled, total = self.puzzle:progress()
-                        lines[#lines+1] = T(_("Progress: %1/%2 cells"), filled, total)
-                        if self.puzzle.notes and self.puzzle.notes ~= "" then
-                            lines[#lines+1] = ""
-                            lines[#lines+1] = self.puzzle.notes
-                        end
-                        UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n") })
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Cancel"),
-                    background = Blitbuffer.COLOR_WHITE,
-                    callback = close,
-                },
+                    elseif correct == total then
+                        UIManager:show(InfoMessage:new{
+                            text = T(_("All filled letters correct! (%1/%1)"), total),
+                            timeout = 3,
+                        })
+                    else
+                        UIManager:show(InfoMessage:new{
+                            text = T(_("Filled letters: %1/%2 correct"), correct, total),
+                            timeout = 3,
+                        })
+                    end
+                end,
             },
         },
+        {
+            {
+                text = _("Reveal letter"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    local r, c = self.puzzle:getCursor()
+                    self.puzzle:revealCell(r, c)
+                    self:save(); self:refresh()
+                end,
+            },
+            {
+                text = _("Reveal word"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    self.puzzle:revealWord()
+                    self:save(); self:refresh()
+                end,
+            },
+            {
+                text = _("Reveal all"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    UIManager:show(ConfirmBox:new{
+                        text = _("Reveal every letter? This ends the puzzle."),
+                        ok_text = _("Reveal"),
+                        ok_callback = function()
+                            self.puzzle:revealAll()
+                            self:save(); self:refresh()
+                        end,
+                    })
+                end,
+            },
+        },
+        {
+            {
+                text = _("Reset puzzle"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    UIManager:show(ConfirmBox:new{
+                        text = _("Clear all your answers?"),
+                        ok_text = _("Reset"),
+                        ok_callback = function()
+                            self.puzzle:resetUser()
+                            self.puzzle:ensureCursorOnWhite()
+                            self:save(); self:refresh()
+                        end,
+                    })
+                end,
+            },
+            {
+                text = _("Info"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = function()
+                    close()
+                    local lines = {}
+                    if self.puzzle.title ~= "" then lines[#lines+1] = T(_("Title: %1"), self.puzzle.title) end
+                    if self.puzzle.author ~= "" then lines[#lines+1] = T(_("Author: %1"), self.puzzle.author) end
+                    if self.puzzle.copyright ~= "" then lines[#lines+1] = T(_("Copyright: %1"), self.puzzle.copyright) end
+                    local filled, total = self.puzzle:progress()
+                    lines[#lines+1] = T(_("Progress: %1/%2 cells"), filled, total)
+                    if self.puzzle.notes and self.puzzle.notes ~= "" then
+                        lines[#lines+1] = ""
+                        lines[#lines+1] = self.puzzle.notes
+                    end
+                    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n") })
+                end,
+            },
+        },
+        {
+            {
+                text = _("Cancel"),
+                background = Blitbuffer.COLOR_WHITE,
+                callback = close,
+            },
+        },
+    }
+    -- Archive puzzles (NYT): step to the previous/next day's puzzle
+    if self.plugin and self.plugin.getArchiveNeighbor then
+        local nav_row = {}
+        for _idx, step in ipairs{ -1, 1 } do
+            local source, date = self.plugin:getArchiveNeighbor(self.puzzle, step)
+            if source then
+                local date_str = string.format("%04d-%02d-%02d", date.year, date.month, date.day)
+                nav_row[#nav_row + 1] = {
+                    text = step < 0 and ("◀ " .. date_str) or (date_str .. " ▶"),
+                    background = Blitbuffer.COLOR_WHITE,
+                    callback = function()
+                        close()
+                        self.plugin:fetchFromSource(source, date)
+                    end,
+                }
+            end
+        end
+        if #nav_row > 0 then
+            table.insert(buttons, 1, nav_row)
+        end
+    end
+    dialog = ButtonDialog:new{
+        title = _("Crossword"),
+        buttons = buttons,
     }
     UIManager:show(dialog)
 end

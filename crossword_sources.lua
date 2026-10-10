@@ -23,6 +23,7 @@ local json = require("json")
 local logger = require("logger")
 
 local AmuseLabs = require("crossword_amuselabs")
+local Library = require("crossword_library")
 local NYT = require("crossword_nyt")
 local PuzParser = require("crossword_puz_parser")
 
@@ -400,10 +401,10 @@ function Sources.fetchBEQ(date)
     return body
 end
 
--- New York Times (from GitHub archive, 1977-present)
+-- New York Times (from GitHub archive, or a local copy in a puzzle folder)
 function Sources.fetchNYT(date)
     date = date or getTodayDate()
-    return NYT.fetchPuzzle(date)
+    return NYT.fetchPuzzle(date, Library.PUZZLE_DIRS)
 end
 
 -- New Yorker (Monday only, free)
@@ -537,11 +538,15 @@ Sources.SOURCES = {
     -- },
     {
         id = "nyt",
-        label = "New York Times (Archive 1977+)",
+        label = "New York Times (Archive 1976-2018)",
         fetch = Sources.fetchNYT,
         supports_date = true,
         free = true,
-        archive_note = "Latest puzzles may have 1-2 day delay",
+        -- Archive with a fixed range: no "today", no relative dates
+        first_date = NYT.FIRST_DATE,
+        last_date = NYT.LAST_DATE,
+        gaps = NYT.GAPS,
+        adjacent_date = NYT.adjacentDate,
     },
 }
 
