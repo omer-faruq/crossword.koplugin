@@ -28,6 +28,7 @@ local Screen = Device.screen
 local GridWidget = InputContainer:extend{
     puzzle = nil,
     size = nil,
+    letter_scale = 55, -- letter font size, percent of the cell size
     on_tap = nil, -- function(row, col, is_same_cell)
 }
 
@@ -53,7 +54,7 @@ end
 function GridWidget:computeFonts()
     local cells_per_side = math.max(self.puzzle.width, self.puzzle.height)
     local cell_size = self.size / cells_per_side
-    local letter_face_size = math.max(10, math.floor(cell_size * 0.55))
+    local letter_face_size = math.max(10, math.floor(cell_size * self.letter_scale / 100))
     local number_face_size = math.max(6, math.floor(cell_size * 0.22))
     self.letter_face = Font:getFace("cfont", letter_face_size)
     self.number_face = Font:getFace("smallinfofont", number_face_size)

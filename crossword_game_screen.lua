@@ -31,6 +31,7 @@ local T = require("ffi/util").template
 
 local CluesWidget = require("crossword_clues_widget")
 local GridWidget = require("crossword_grid_widget")
+local Settings = require("crossword_settings")
 local Keyboard = require("crossword_keyboard")
 
 local Screen = Device.screen
@@ -178,6 +179,7 @@ function GameScreen:init()
     self.grid_widget = GridWidget:new{
         puzzle = self.puzzle,
         size = grid_size,
+        letter_scale = Settings.get(self.plugin.db, "letter_scale"),
         on_tap = function(row, col, is_same)
             if is_same then
                 self.puzzle:toggleDirection()

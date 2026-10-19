@@ -6,6 +6,7 @@ Exposes:
   - default target word count
   - preferred dictionary path (ifo) for the generator
   - auto-reveal on wrong letter (opt-in)
+  - letter size in grid cells
 
 The returned table is meant to be used as a sub_item_table under the plugin's
 main menu entry.
@@ -30,6 +31,16 @@ Settings.DEFAULTS = {
     generator_min_len = 3,
     preferred_dictionary = "",
     auto_check_on_commit = false,
+    letter_scale = 55, -- letter font size as a percentage of the cell size
+}
+
+-- Largest first; 55 % is the original (and default) size.
+Settings.LETTER_SCALES = {
+    { value = 55, text = _("Largest") },
+    { value = 48, text = _("Large") },
+    { value = 42, text = _("Medium") },
+    { value = 36, text = _("Small") },
+    { value = 30, text = _("Smallest") },
 }
 
 function Settings.get(db, key)
@@ -168,6 +179,34 @@ function Settings.buildSubMenu(db, on_change)
                     items[#items + 1] = {
                         text = _("No StarDict dictionaries found under data/dict/"),
                         enabled = false,
+                    }
+                end
+                return items
+            end,
+        },
+        {
+            text_func = function()
+                local cur = Settings.get(db, "letter_scale")
+                for _idx, opt in ipairs(Settings.LETTER_SCALES) do
+                    if opt.value == cur then
+                        return T(_("Letter size: %1"), opt.text)
+                    end
+                end
+                return T(_("Letter size: %1 %"), cur)
+            end,
+            sub_item_table_func = function()
+                local items = {}
+                for _idx, opt in ipairs(Settings.LETTER_SCALES) do
+                    local captured = opt.value
+                    items[#items + 1] = {
+                        text = opt.text,
+                        checked_func = function()
+                            return Settings.get(db, "letter_scale") == captured
+                        end,
+                        callback = function()
+                            Settings.set(db, "letter_scale", captured)
+                            refresh()
+                        end,
                     }
                 end
                 return items
