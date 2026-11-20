@@ -29,8 +29,12 @@ local logger = require("logger")
 
 -- Extend zlib cdef locally (the stock ffi/zlib_h only declares the simple
 -- compress/uncompress entry points; we need inflate* for gzip mode).
+-- LuaJIT's C namespace is process-wide and shared by every plugin: other
+-- plugins (acsm, simpleui, FastDict...) also declare z_stream_s / inflate*,
+-- and redefining a struct tag is a hard error. Use private names only, bound
+-- to the real zlib symbols via __asm__, so plugin load order never matters.
 ffi.cdef[[
-typedef struct z_stream_s {
+typedef struct crossword_z_stream {
     const unsigned char *next_in;
     unsigned int     avail_in;
     unsigned long    total_in;
@@ -45,12 +49,12 @@ typedef struct z_stream_s {
     int              data_type;
     unsigned long    adler;
     unsigned long    reserved;
-} z_stream;
+} crossword_z_stream;
 
-int inflateInit2_(z_stream *strm, int windowBits, const char *version, int stream_size);
-int inflate(z_stream *strm, int flush);
-int inflateEnd(z_stream *strm);
-const char *zlibVersion(void);
+int crossword_inflateInit2_(crossword_z_stream *strm, int windowBits, const char *version, int stream_size) __asm__("inflateInit2_");
+int crossword_inflate(crossword_z_stream *strm, int flush) __asm__("inflate");
+int crossword_inflateEnd(crossword_z_stream *strm) __asm__("inflateEnd");
+const char *crossword_zlibVersion(void) __asm__("zlibVersion");
 ]]
 
 local libz = ffi.loadlib("z", 1)
@@ -61,12 +65,12 @@ local Z_NO_FLUSH = 0
 local GZIP_WINDOW_BITS = 31 -- 15 + 16: auto-detect gzip/zlib; 31 forces gzip.
 
 local function gzipInflate(data)
-    local stream = ffi.new("z_stream[1]")
+    local stream = ffi.new("crossword_z_stream[1]")
     -- zlib requires inflateInit2 to be invoked via the macro-equivalent
-    -- inflateInit2_ with the zlib version string and sizeof(z_stream).
-    local ver = libz.zlibVersion()
-    local stream_size = ffi.sizeof("z_stream")
-    local rc = libz.inflateInit2_(stream, GZIP_WINDOW_BITS, ver, stream_size)
+    -- inflateInit2_ with the zlib version string and sizeof(crossword_z_stream).
+    local ver = libz.crossword_zlibVersion()
+    local stream_size = ffi.sizeof("crossword_z_stream")
+    local rc = libz.crossword_inflateInit2_(stream, GZIP_WINDOW_BITS, ver, stream_size)
     if rc ~= Z_OK then
         return nil, string.format("inflateInit2 failed (%d)", rc)
     end
@@ -82,7 +86,7 @@ local function gzipInflate(data)
     while true do
         stream[0].next_out = out_buf
         stream[0].avail_out = chunk_size
-        rc = libz.inflate(stream, Z_NO_FLUSH)
+        rc = libz.crossword_inflate(stream, Z_NO_FLUSH)
         if rc == Z_OK or rc == Z_STREAM_END then
             local produced = chunk_size - stream[0].avail_out
             if produced > 0 then
@@ -90,13 +94,13 @@ local function gzipInflate(data)
             end
             if rc == Z_STREAM_END then break end
         else
-            libz.inflateEnd(stream)
+            libz.crossword_inflateEnd(stream)
             return nil, string.format("inflate error %d (%s)", rc,
                 stream[0].msg ~= nil and ffi.string(stream[0].msg) or "unknown")
         end
     end
 
-    libz.inflateEnd(stream)
+    libz.crossword_inflateEnd(stream)
     return table.concat(out_chunks)
 end
 
